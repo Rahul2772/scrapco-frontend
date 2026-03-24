@@ -1292,12 +1292,11 @@ function WhatsAppLogs() {
 // ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
 function LoginScreen() {
   const { login } = useAuth();
-  const [email, setEmail]       = useState("admin@thescrapco.in");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
   const [showPw, setShowPw]     = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
-  const [useDemo, setUseDemo]   = useState(true);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -1311,12 +1310,6 @@ function LoginScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Demo login — bypasses backend for offline preview
-  const handleDemo = () => {
-    // This triggers a fake auth in the root component
-    window.__demoLogin && window.__demoLogin();
   };
 
   return (
@@ -1378,30 +1371,6 @@ function LoginScreen() {
             {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
-
-        <button
-          className="btn btn-ghost"
-          style={{ width: "100%", justifyContent: "center", marginTop: 10, fontSize: 13 }}
-          onClick={handleDemo}
-        >
-          Continue in Demo Mode (No Backend)
-        </button>
-
-        <div className="login-hint">
-          <div className="login-hint-title">Default Credentials</div>
-          <div className="login-hint-row">
-            <span className="role-badge role-admin"><Shield size={9} /> Admin</span>
-            <span>admin@thescrapco.in / admin123</span>
-          </div>
-          <div className="login-hint-row">
-            <span className="role-badge role-cashier"><User size={9} /> Cashier</span>
-            <span>cashier@thescrapco.in / cashier123</span>
-          </div>
-          <div className="login-hint-row">
-            <span className="role-badge role-driver"><Truck size={9} /> Driver</span>
-            <span>driver@thescrapco.in / driver123</span>
-          </div>
-        </div>
       </div>
     </div>
   );
