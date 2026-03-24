@@ -1577,15 +1577,33 @@ function ManageUsers() {
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 function Dashboard({ transactions, materials, token }) {
-  const [dash,    setDash]    = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [dash,       setDash]       = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [dashError,  setDashError]  = useState("");
 
   useEffect(() => {
-    if (!token) { setLoading(false); return; }
-    api.getDashboard(token)
-      .then(r => { if (r.success) setDash(r.dashboard); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    if (!token) {
+      queueMicrotask(() => setLoading(false));
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      setDashError("");
+      setLoading(true);
+      try {
+        const r = await api.getDashboard(token);
+        if (cancelled) return;
+        if (r.success) setDash(r.dashboard);
+        else setDashError(r.message || "Could not load dashboard.");
+      } catch {
+        if (!cancelled) setDashError("Could not connect to server for dashboard data.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [token]);
 
   // Fallback: derive stats from local transactions when API dash not ready
@@ -1596,7 +1614,9 @@ function Dashboard({ transactions, materials, token }) {
   const totalWeight  = dash?.revenue?.weight_this_month
     ?? transactions.reduce((s, t) => s + t.weight, 0);
   const lowStock     = materials.filter(m => m.stock <= m.threshold);
-  const overdueAmt   = dash?.invoice_summary?.overdue_amount ?? 0;
+  const overdueAmt =
+    dash?.invoice_summary?.overdue_amount
+    ?? transactions.filter(t => t.status === "overdue").reduce((s, t) => s + t.total, 0);
 
   // ── Build chart data from real transactions ──────────────────────────────
   const chartData = useMemo(() => {
@@ -1639,6 +1659,14 @@ function Dashboard({ transactions, materials, token }) {
 
   return (
     <div className="fade-in">
+      {dashError && (
+        <div className="login-error" style={{ marginBottom: 16 }}>
+          <AlertCircle size={14} /> {dashError} Showing cached lists where available.
+        </div>
+      )}
+      {loading && token && (
+        <div className="muted" style={{ marginBottom: 12, fontSize: 13 }}>Loading dashboard…</div>
+      )}
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-label">Total Revenue (This Month)</div>
@@ -1648,7 +1676,15 @@ function Dashboard({ transactions, materials, token }) {
         <div className="stat-card">
           <div className="stat-label">Pending Payments</div>
           <div className="stat-value" style={{ color: "var(--amber)" }}>₹{Number(pendingAmt).toLocaleString("en-IN")}</div>
-          <div className="stat-change" style={{ color: "var(--text-dim)" }}><Clock size={12} /> {dash?.invoice_summary?.pending_count ?? transactions.filter(t => t.status === "pending").length} invoices outstanding</div>
+          <div className="stat-change" style={{ color: "var(--text-dim)" }}>
+            <Clock size={12} /> {dash?.invoice_summary?.pending_count ?? transactions.filter(t => t.status === "pending").length} invoices outstanding
+            {Number(overdueAmt) > 0 && (
+              <span style={{ display: "block", marginTop: 4, color: "var(--red)" }}>
+                Overdue: ₹{Number(overdueAmt).toLocaleString("en-IN")}
+                {dash?.invoice_summary?.overdue_count != null && ` (${dash.invoice_summary.overdue_count})`}
+              </span>
+            )}
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Total Weight Collected</div>
@@ -1709,7 +1745,8 @@ function Dashboard({ transactions, materials, token }) {
             </div>
           </div>
           {materials.slice(0, 6).map(m => {
-            const pct = Math.min(100, (m.stock / (m.threshold * 10)) * 100);
+            const cap = Math.max((Number(m.threshold) || 0) * 10, 1);
+            const pct = Math.min(100, (m.stock / cap) * 100);
             const low = m.stock <= m.threshold;
             return (
               <div className="material-bar" key={m.id}>
